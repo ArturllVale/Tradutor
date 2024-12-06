@@ -1,69 +1,61 @@
-# Tradutor (Python Text Translator)
+# RO Database Tradutor
+
+Uma ferramenta de tradução especializada para arquivos de banco de dados do Ragnarok Online (rAthena/Hercules)
 
 ## 📝 Descrição
-Este é um aplicativo de tradução de texto desenvolvido em Python que permite traduzir textos entre diferentes idiomas de forma simples e eficiente.
 
-## 🚀 Funcionalidades
-- Tradução de texto entre múltiplos idiomas
-- Interface simples e intuitiva
-- Suporte a vários pares de idiomas
-- Detecção automática de idioma (opcional)
+Esta ferramenta foi desenvolvida para facilitar a tradução de arquivos de banco de dados dos emuladores rAthena e Hercules do Ragnarok Online. Ela suporta a tradução dos seguintes arquivos:
 
-## 📋 Pré-requisitos
-- Python 3.6 ou superior
-- pip (gerenciador de pacotes Python)
+- `mob_db`: Database de monstros
+- `item_db`: Database de itens
+- `npc`: Scripts de NPCs
 
-## 🔧 Instalação
+## ✨ Funcionalidades
 
-1. Clone o repositório:
-```bash
-git clone https://github.com/ArturllVale/Tradutor.git
-cd Tradutor
-```
+- Tradução automática de arquivos mob_db
+- Tradução automática de arquivos item_db
+- Tradução de scripts de NPCs
+- Interface gráfica amigável
+- Cache de traduções para melhor performance
+- Suporte a traduções em lote
+- Integração com Divine Pride API para dados precisos
 
-2. Instale as dependências necessárias:
-```bash
-pip install -r requirements.txt
-```
+## 🚀 Como Usar
 
-## 💻 Como usar
+1. Clone este repositório
+2. Instale as dependências:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Execute o programa:
+   ```bash
+   python Tradutor.py
+   ```
 
-1. Execute o script principal:
-```bash
-python Tradutor.py
-```
+## 📋 Requisitos
 
-2. Insira o texto que deseja traduzir
-3. Selecione o idioma de origem (ou deixe em automático)
-4. Escolha o idioma de destino
-5. Aguarde o resultado da tradução
+- Python 3.8 ou superior
+- Conexão com a internet
+- API Key do Divine Pride (para algumas funcionalidades)
 
-## 🛠️ Tecnologias Utilizadas
-- Python 3
-- Biblioteca Googletrans (para tradução)
-- TKinter (para interface gráfica)
+## 🛠️ Configuração
 
-## 📦 Estrutura do Projeto
-```
-Tradutor/
-│
-├── Tradutor.py          # Script principal
-├── requirements.txt     # Dependências do projeto
-└── README.md           # Documentação
-```
+1. Ao iniciar o programa pela primeira vez, você precisará configurar sua API Key do Divine Pride
+2. Selecione o tipo de arquivo que deseja traduzir
+3. Escolha o arquivo de origem
+4. Inicie o processo de tradução
 
-## 📄 Licença
-Este projeto está sob a licença MIT - veja o arquivo [LICENSE](LICENSE) para detalhes.
+## 📄 Formatos Suportados
 
-## ✨ Contribuindo
-1. Faça um Fork do projeto
-2. Crie uma Branch para sua Feature (`git checkout -b feature/AmazingFeature`)
-3. Faça o Commit de suas mudanças (`git commit -m 'Add some AmazingFeature'`)
-4. Faça o Push para a Branch (`git push origin feature/AmazingFeature`)
-5. Abra um Pull Request
+- Arquivos .yml do mob_db
+- Arquivos .yml do item_db
+- Scripts .txt de NPCs
+- Arquivos YAML (para versões mais recentes dos emuladores)
 
-## 🤝 Autor
-- Artur Vale
+## 🤝 Contribuindo
 
-## 📞 Suporte
-Se você encontrar algum problema ou tiver sugestões, por favor abra uma issue no GitHub.
+Contribuições são bem-vindas! Sinta-se à vontade para abrir issues ou enviar pull requests.
+
+## 📝 Licença
+
+Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
