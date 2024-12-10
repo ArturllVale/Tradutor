@@ -28,9 +28,10 @@ yaml.indent(mapping=2, sequence=4, offset=2)
 
 # Configuração do cache
 CACHE_DIR = Path.home() / '.mobdb_cache'
+CACHE_TTL = 86400  # Tempo de expiração do cache em segundos (1 dia)
 CACHE_DIR.mkdir(exist_ok=True)
-BATCH_SIZE = 10  # Número de requisições simultâneas
-MAX_RETRIES = 3  # Número máximo de tentativas para cada requisição
+BATCH_SIZE = 20  # Número de requisições simultâneas
+MAX_RETRIES = 3  # Número máximo de tentativas para cada requisição 
 
 # URLs base para cada tipo
 MONSTER_BASE_URL = 'https://www.divine-pride.net/api/database/Monster/'
@@ -41,18 +42,23 @@ if os.name == 'nt':
 
 @lru_cache(maxsize=1000)
 def get_cached_data(data_id, api_key, data_type):
-    """Recupera dados do cache local."""
-    cache_file = CACHE_DIR / f"{data_type}_{data_id}.json"
+    """Recupera dados do cache local, verificando a validade (TTL)."""
+    cache_file = CACHE_DIR / f"{data_type}_{api_key}_{data_id}.json"  # Inclui api_key na chave
     if cache_file.exists():
-        with open(cache_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    return None
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if time.time() - data.get('timestamp', 0) < CACHE_TTL:
+                    return data['data']
+        except (json.JSONDecodeError, KeyError):
+            pass  # Ignora dados inválidos ou expirados
+    return None  # Retorna None se não encontrado ou inválido
 
 def save_to_cache(data_id, data, data_type):
     """Salva dados no cache local."""
-    cache_file = CACHE_DIR / f"{data_type}_{data_id}.json"
+    cache_file = CACHE_DIR / f"{data_type}_{api_key}_{data_id}.json"  # Inclui api_key na chave
     with open(cache_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f)
+        json.dump({'data': data, 'timestamp': time.time()}, f) 
 
 async def fetch_data(session, base_url, data_id, api_key, headers, retries=0):
     """Função assíncrona para buscar dados específicos."""
@@ -63,28 +69,32 @@ async def fetch_data(session, base_url, data_id, api_key, headers, retries=0):
             if response.status == 200:
                 data = await response.json()
                 save_to_cache(data_id, data, 'monster' if 'Monster' in base_url else 'item')
-                return data_id, data
-            elif response.status == 429 and retries < MAX_RETRIES:  # Rate limit
-                await asyncio.sleep(1 * (retries + 1))
-                return await fetch_data(session, base_url, data_id, api_key, headers, retries + 1)
+                return data_id, data  # Retorna os dados se a requisição for bem-sucedida
+            elif response.status == 429:  # Rate limit
+                if retries < MAX_RETRIES:
+                    await asyncio.sleep(1 * (retries + 1))  # Aguarda antes de tentar novamente
+                    return await fetch_data(session, base_url, data_id, api_key, headers, retries + 1)
+                else:
+                    logging.error(f"Rate limit excedido para ID {data_id}.")
+                    return data_id, None  # Retorna None se o limite de tentativas for atingido
             else:
-                return data_id, None
-    except Exception as e:
-        logging.error(f"Erro ao buscar ID {data_id}: {e}")
+                logging.error(f"Erro ao buscar ID {data_id}: Código de status {response.status}")
+                return data_id, None  # Retorna None se houver um erro na requisição
+    except aiohttp.ClientError as e:
+        logging.error(f"Erro de conexão ao buscar ID {data_id}: {e}")
         if retries < MAX_RETRIES:
-            await asyncio.sleep(1 * (retries + 1))
+            await asyncio.sleep(1 * (retries + 1))  # Aguarda antes de tentar novamente
             return await fetch_data(session, base_url, data_id, api_key, headers, retries + 1)
-        return data_id, None
+        return data_id, None  # Retorna None se o limite de tentativas for atingido
 
 async def process_batch(session, base_url, batch_ids, api_key, headers):
     """Processa um lote de IDs."""
     tasks = []
-    data_type = 'monster' if 'Monster' in base_url else 'item'
-    for data_id in batch_ids:
-        cached_data = get_cached_data(data_id, api_key, data_type)
-        if cached_data:
-            tasks.append(asyncio.create_task(asyncio.sleep(0)))
-        else:
+    for data_id in batch_ids: 
+        cached_data = get_cached_data(data_id, api_key, 'monster' if 'Monster' in base_url else 'item')
+        if cached_data:  
+            tasks.append(asyncio.create_task(asyncio.sleep(0)))  # Pula se estiver no cache
+        else: 
             tasks.append(asyncio.create_task(
                 fetch_data(session, base_url, data_id, api_key, headers)
             ))
@@ -92,18 +102,20 @@ async def process_batch(session, base_url, batch_ids, api_key, headers):
     return await asyncio.gather(*tasks)
 
 def test_api_connection(api_key, base_url):
-    """Testa a conexão com a API."""
-    try:
-        test_url = f"{base_url}1?apiKey={api_key}"
-        response = aiohttp.ClientSession().head(test_url)
-        if response.status == 200:
-            return True
-        else:
-            logging.error(f"Falha ao conectar à API. Código de status: {response.status}")
+    """Testa a conexão com a API usando aiohttp."""
+    async def _test_connection():
+        try:
+            test_url = f"{base_url}1?apiKey={api_key}"
+            async with aiohttp.ClientSession() as session:
+                async with session.head(test_url) as response:
+                    return response.status == 200
+        except aiohttp.ClientError as e:
+            logging.error(f"Erro ao conectar à API: {e}")
             return False
-    except aiohttp.ClientError as e:
-        logging.error(f"Erro ao conectar à API: {e}")
-        return False
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop.run_until_complete(_test_connection())
 
 async def translate_file_async(api_key, input_file, progress_bar, status_label, base_url):
     """Versão assíncrona da função de tradução."""
@@ -119,6 +131,11 @@ async def translate_file_async(api_key, input_file, progress_bar, status_label, 
 
     try:
         with open(input_file, 'r', encoding='utf-8') as file:
+            content = file.read()
+            if not content.strip():  # Verifica se o arquivo está vazio
+                messagebox.showwarning("Aviso", "O arquivo selecionado está vazio.")
+                return
+
             data = yaml.load(file)
 
         total_items = len(data['Body'])
@@ -135,11 +152,14 @@ async def translate_file_async(api_key, input_file, progress_bar, status_label, 
                 results = await process_batch(session, base_url, batch, api_key, headers)
                 
                 for data_id, response_data in results:
-                    if response_data and 'name' in response_data:
-                        for item in data['Body']:
-                            if item['Id'] == data_id:
-                                item['Name'] = response_data['name']
-                                break
+                    if response_data: 
+                        if 'name' in response_data and response_data['name']:  # Verifica se 'name' existe e não é vazio
+                            for item in data['Body']:
+                                if item['Id'] == data_id:
+                                    item['Name'] = response_data['name']
+                                    break
+                        else:
+                            logging.warning(f"Resposta vazia para ID {data_id}.")
                     
                     progress += 1
                     progress_bar['value'] = progress
@@ -157,16 +177,6 @@ async def translate_file_async(api_key, input_file, progress_bar, status_label, 
     except Exception as e:
         logging.error(f"Erro durante a tradução: {e}")
         messagebox.showerror("Erro", f"Ocorreu um erro durante a tradução: {str(e)}")
-
-def translate_file(api_key, input_file, progress_bar, status_label, base_url):
-    """Wrapper para executar a função assíncrona em uma thread."""
-    async def run_async():
-        await translate_file_async(api_key, input_file, progress_bar, status_label, base_url)
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(run_async())
-    loop.close()
 
 def select_file(label):
     global selected_file
@@ -207,7 +217,7 @@ def create_tab_content(tab, base_url, tipo):
 
     translate_button = ttk.Button(main_frame, text=f"Traduzir {tipo}", 
                               command=lambda: threading.Thread(
-                                  target=translate_file, 
+                                  target=lambda: asyncio.run(translate_file_async(api_key_entry.get(), selected_file, progress_bar, status_label, base_url)),
                                   args=(api_key_entry.get(), selected_file, progress_bar, status_label, base_url)
                               ).start())
     translate_button.pack(pady=10)
